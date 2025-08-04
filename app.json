@@ -1,22 +1,24 @@
 {
   "expo": {
-    "name": "HighlandercrmMobile",
-    "slug": "HighlandercrmMobile",
+    "name": "Highlander CRM Mobile",
+    "slug": "highlander-crm-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "highlandercrmmobile",
+    "scheme": "highlandercrm",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.highlander.crm"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#6366F1"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "package": "com.highlander.crm"
     },
     "web": {
       "bundler": "metro",
@@ -31,7 +33,7 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff"
+          "backgroundColor": "#6366F1"
         }
       ]
     ],
