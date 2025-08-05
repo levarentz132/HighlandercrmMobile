@@ -29,6 +29,8 @@ const AttendanceScreen: React.FC = () => {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [lastAttendance, setLastAttendance] = useState<any | null>(null);
+  // Weekly stats state
+  const [weekStats, setWeekStats] = useState({ hours: 0, daysPresent: 0, lateDays: 0 });
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [locationReason, setLocationReason] = useState('Arrived at office');
   const [showLocationInput, setShowLocationInput] = useState(false);
@@ -79,77 +81,32 @@ const AttendanceScreen: React.FC = () => {
         });
         const result = await response.json();
         // Laravel pagination: result.data is the array, result.current_page, result.last_page
-        const newData = Array.isArray(result.data) ? result.data : [];
+        let newData = Array.isArray(result.data) ? result.data : [];
+        // Always show the latest record with no clock out time at the top
+        let latestNoClockOut = null;
+        for (let rec of newData) {
+          if (rec.type === 1 && !rec.clock_out_time) {
+            latestNoClockOut = rec;
+            break;
+          }
+        }
+        if (latestNoClockOut) {
+          // Remove duplicate if already in newData
+          newData = [latestNoClockOut, ...newData.filter((r: any) => r !== latestNoClockOut)];
+        }
         setAttendanceHistory(prev => page === 1 ? newData : [...prev, ...newData]);
         setHasMore(result.current_page < result.last_page);
-        if (newData.length > 0) {
-          const last = newData[0]; // assuming latest is first
-          setLastAttendance(last);
-          // Check if last attendance is from a previous day and not checked out
-          if (last.type === 1 && !last.clock_out_time) {
-            const lastDate = new Date(last.date);
-            const today = new Date();
-            if (
-              lastDate.getFullYear() !== today.getFullYear() ||
-              lastDate.getMonth() !== today.getMonth() ||
-              lastDate.getDate() !== today.getDate()
-            ) {
-              // Submit static clock out for previous day
-              const staticClockOut = async () => {
-                const payload = {
-                  status: 'out',
-                  lat: OFFICE_COORDS.lat,
-                  lng: OFFICE_COORDS.lng,
-                  location_reason: 'Auto clock out',
-                  client_time: `${last.date} 17:00:00`,
-                };
-                await fetch('https://crm.highlander.co.id/api/attendance/clock', {
-                  method: 'POST',
-                  headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/json',
-                  },
-                  body: JSON.stringify(payload),
-                });
-              };
-              await staticClockOut();
-              // Refetch attendance after auto clock out
-              const refetch = await fetch(`https://crm.highlander.co.id/api/attendance?per_page=20&page=1`, {
-                method: 'GET',
-                headers: {
-                  'Authorization': `Bearer ${token}`,
-                  'Accept': 'application/json',
-                },
-              });
-              const refetchResult = await refetch.json();
-              const refetchData = Array.isArray(refetchResult.data) ? refetchResult.data : [];
-              setAttendanceHistory(refetchData);
-              setHasMore(refetchResult.current_page < refetchResult.last_page);
-              if (refetchData.length > 0) {
-                const lastRefetch = refetchData[0];
-                setLastAttendance(lastRefetch);
-                if (lastRefetch.type === 1 && !lastRefetch.clock_out_time) {
-                  setIsCheckedIn(true);
-                  setCheckInTime(lastRefetch.clock_in_time || null);
-                } else {
-                  setIsCheckedIn(false);
-                  setCheckInTime(null);
-                }
-              } else {
-                setIsCheckedIn(false);
-                setCheckInTime(null);
-              }
-              setLoadingHistory(false);
-              return;
-            }
-            setIsCheckedIn(true);
-            setCheckInTime(last.clock_in_time || null);
-          } else {
-            setIsCheckedIn(false);
-            setCheckInTime(null);
-          }
+        // Set check-in state based on latestNoClockOut
+        if (latestNoClockOut) {
+          setLastAttendance(latestNoClockOut);
+          setIsCheckedIn(true);
+          setCheckInTime(latestNoClockOut.clock_in_time || null);
+        } else if (newData.length > 0) {
+          setLastAttendance(newData[0]);
+          setIsCheckedIn(false);
+          setCheckInTime(null);
         } else {
+          setLastAttendance(null);
           setIsCheckedIn(false);
           setCheckInTime(null);
         }
@@ -161,6 +118,46 @@ const AttendanceScreen: React.FC = () => {
     };
     fetchAttendance();
   }, [page]);
+
+  // Calculate weekly stats whenever attendanceHistory changes
+  useEffect(() => {
+    // Always count week as Monday to Sunday
+    const now = new Date();
+    // Find Monday of current week
+    const currentDay = now.getDay(); // 0=Sunday, 1=Monday, ...
+    const monday = new Date(now);
+    if (currentDay === 0) {
+      // If today is Sunday, go back 6 days
+      monday.setDate(now.getDate() - 6);
+    } else {
+      monday.setDate(now.getDate() - currentDay + 1);
+    }
+    monday.setHours(0, 0, 0, 0);
+    // Find Sunday of current week
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+    sunday.setHours(23, 59, 59, 999);
+
+    let hours = 0;
+    let daysPresent = 0;
+    let lateDays = 0;
+    attendanceHistory.forEach((rec) => {
+      // Parse record date
+      const recDate = new Date(rec.date);
+      if (recDate >= monday && recDate <= sunday) {
+        if (rec.status === 1 || rec.status === 2) {
+          daysPresent++;
+        }
+        if (rec.status === 2) {
+          lateDays++;
+        }
+        if (rec.work_hours) {
+          hours += parseFloat(rec.work_hours);
+        }
+      }
+    });
+    setWeekStats({ hours, daysPresent, lateDays });
+  }, [attendanceHistory]);
 
   // Infinite scroll handler
   const handleLoadMore = () => {
@@ -231,8 +228,43 @@ const AttendanceScreen: React.FC = () => {
       const result = await response.json();
       if (response.ok) {
         Alert.alert('Success', `Clock ${pendingClockType === 'in' ? 'in' : 'out'} successful.`);
-        // Force refresh by resetting to first page (triggers useEffect)
-        setPage(1);
+        // Immediately refetch attendance data for real-time update
+        setLoadingHistory(true);
+        const attendanceRes = await fetch(`https://crm.highlander.co.id/api/attendance?per_page=20&page=1`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/json',
+          },
+        });
+        const attendanceResult = await attendanceRes.json();
+        let newData = Array.isArray(attendanceResult.data) ? attendanceResult.data : [];
+        let latestNoClockOut = null;
+        for (let rec of newData) {
+          if (rec.type === 1 && !rec.clock_out_time) {
+            latestNoClockOut = rec;
+            break;
+          }
+        }
+        if (latestNoClockOut) {
+          newData = [latestNoClockOut, ...newData.filter((r: any) => r !== latestNoClockOut)];
+        }
+        setAttendanceHistory(newData);
+        setHasMore(attendanceResult.current_page < attendanceResult.last_page);
+        if (latestNoClockOut) {
+          setLastAttendance(latestNoClockOut);
+          setIsCheckedIn(true);
+          setCheckInTime(latestNoClockOut.clock_in_time || null);
+        } else if (newData.length > 0) {
+          setLastAttendance(newData[0]);
+          setIsCheckedIn(false);
+          setCheckInTime(null);
+        } else {
+          setLastAttendance(null);
+          setIsCheckedIn(false);
+          setCheckInTime(null);
+        }
+        setPage(1); // keep pagination in sync
       } else {
         Alert.alert('Error', result.message || 'Failed to submit attendance.');
       }
@@ -240,6 +272,7 @@ const AttendanceScreen: React.FC = () => {
       Alert.alert('Error', err.message || 'Failed to submit attendance.');
     } finally {
       setPendingClockType(null);
+      setLoadingHistory(false);
     }
   };
 
@@ -386,15 +419,15 @@ const AttendanceScreen: React.FC = () => {
         <ThemedText style={styles.sectionTitle}>This Week</ThemedText>
         <ThemedView style={styles.statsContainer}>
           <ThemedView style={[styles.statBox, { backgroundColor: theme.card }]}> 
-            <ThemedText style={styles.statNumber}>40.5</ThemedText>
+            <ThemedText style={styles.statNumber}>{weekStats.hours.toFixed(1)}</ThemedText>
             <ThemedText style={styles.statLabel}>Hours</ThemedText>
           </ThemedView>
           <ThemedView style={styles.statBox}>
-            <ThemedText style={styles.statNumber}>4</ThemedText>
+            <ThemedText style={styles.statNumber}>{weekStats.daysPresent}</ThemedText>
             <ThemedText style={styles.statLabel}>Days Present</ThemedText>
           </ThemedView>
           <ThemedView style={styles.statBox}>
-            <ThemedText style={styles.statNumber}>1</ThemedText>
+            <ThemedText style={styles.statNumber}>{weekStats.lateDays}</ThemedText>
             <ThemedText style={styles.statLabel}>Late Days</ThemedText>
           </ThemedView>
         </ThemedView>
