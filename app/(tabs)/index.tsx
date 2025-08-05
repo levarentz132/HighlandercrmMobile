@@ -6,7 +6,39 @@ import { Dimensions, ScrollView, StyleSheet, TouchableOpacity } from 'react-nati
 
 const { width } = Dimensions.get('window');
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import React, { useEffect, useState } from 'react';
+// ...existing code...
+
 export default function DashboardScreen() {
+  const [user, setUser] = useState<any>(null);
+  const [loadingUser, setLoadingUser] = useState(true);
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const token = await AsyncStorage.getItem('auth_token');
+        if (!token) return;
+        const response = await fetch('http://crm.highlander.co.id/api/user', {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/json',
+          },
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setUser(data);
+        }
+      } catch (err) {
+        // handle error (optional)
+      } finally {
+        setLoadingUser(false);
+      }
+    };
+    fetchUser();
+  }, []);
+
   const quickActions = [
     { id: 1, title: 'Check In', icon: 'clock.fill' as const, color: '#10B981', route: '/attendance' },
     { id: 2, title: 'Apply Leave', icon: 'calendar.badge.plus' as const, color: '#F59E0B', route: '/leaves' },
@@ -32,7 +64,9 @@ export default function DashboardScreen() {
       >
         <ThemedView style={styles.headerContent}>
           <ThemedText style={styles.greeting}>Good Morning!</ThemedText>
-          <ThemedText style={styles.userName}>John Doe</ThemedText>
+          <ThemedText style={styles.userName}>
+            {loadingUser ? 'Loading...' : user?.name || 'User'}
+          </ThemedText>
           <ThemedText style={styles.date}>Monday, August 4, 2025</ThemedText>
         </ThemedView>
       </LinearGradient>
