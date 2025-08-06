@@ -286,14 +286,14 @@ export default function OvertimeScreen() {
             {/* Type Picker */}
             <ThemedView style={styles.formGroup}>
               <ThemedText style={styles.formLabel}>Type</ThemedText>
-              <ThemedView style={{ flexDirection: 'row', gap: 8 }}>
+              <ThemedView style={{ flexDirection: 'row', gap: 8 , backgroundColor: 'white'}}>
                 <TouchableOpacity
                   style={[
                     styles.formInput,
                     {
                       flex: 1,
                       borderColor: type === 'leave' ? '#8B5CF6' : '#E5E7EB',
-                      backgroundColor: type === 'leave' ? '#F3F0FF' : 'white',
+                      backgroundColor: 'white',
                     },
                   ]}
                   onPress={() => setType('leave')}
@@ -315,7 +315,7 @@ export default function OvertimeScreen() {
                     {
                       flex: 1,
                       borderColor: type === 'overtime' ? '#8B5CF6' : '#E5E7EB',
-                      backgroundColor: type === 'overtime' ? '#F3F0FF' : 'white',
+                      backgroundColor: 'white',
                     },
                   ]}
                   onPress={() => setType('overtime')}
