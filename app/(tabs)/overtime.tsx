@@ -1,51 +1,63 @@
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { IconSymbol } from '@/components/ui/IconSymbol';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useState } from 'react';
-import { Alert, Dimensions, Modal, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Alert, Dimensions, Modal, Platform, ScrollView, StyleSheet, TextInput, TouchableOpacity } from 'react-native';
 
 const { width } = Dimensions.get('window');
 
 export default function OvertimeScreen() {
   const [showModal, setShowModal] = useState(false);
-  
-  const overtimeHistory = [
-    {
-      id: 1,
-      date: 'Aug 4, 2025',
-      hours: 3.5,
-      reason: 'Project deadline completion',
-      status: 'approved',
-      rate: '$25/hr',
-      total: '$87.50'
-    },
-    {
-      id: 2,
-      date: 'Aug 1, 2025',
-      hours: 2,
-      reason: 'Client emergency support',
-      status: 'approved',
-      rate: '$25/hr',
-      total: '$50.00'
-    },
-    {
-      id: 3,
-      date: 'Jul 30, 2025',
-      hours: 4,
-      reason: 'System maintenance',
-      status: 'pending',
-      rate: '$25/hr',
-      total: '$100.00'
-    },
-  ];
-
-  const monthlyStats = {
-    totalHours: 45.5,
-    totalEarnings: 1137.50,
-    approvedHours: 38.5,
-    pendingHours: 7,
-  };
+  const [overtimeHistory, setOvertimeHistory] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [type, setType] = useState<'leave' | 'overtime'>('overtime');
+  const [date, setDate] = useState('');
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [reason, setReason] = useState('');
+  const [monthlyStats, setMonthlyStats] = useState({
+    totalHours: 0,
+    totalEarnings: 0,
+    approvedHours: 0,
+    pendingHours: 0,
+  });
+  // Fetch overtime data from API
+  useEffect(() => {
+    const fetchOvertime = async () => {
+      setLoading(true);
+      try {
+        const token = await AsyncStorage.getItem('auth_token');
+        if (!token) return;
+        const response = await fetch('https://crm.highlander.co.id/api/leave-overtime?per_page=10', {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/json',
+          },
+        });
+        const result = await response.json();
+        // Laravel paginator: result.data is array, result.total, result.current_page, etc.
+        const dataArr = Array.isArray(result.data) ? result.data : (result.data?.data || []);
+        setOvertimeHistory(dataArr);
+        // Calculate monthly stats from data
+        let totalHours = 0, approvedHours = 0, pendingHours = 0;
+        dataArr.forEach((item: any) => {
+          totalHours += Number(item.hours) || 0;
+          if (item.status === 'approved') approvedHours += Number(item.hours) || 0;
+          if (item.status === 'pending') pendingHours += Number(item.hours) || 0;
+        });
+        setMonthlyStats({ totalHours, totalEarnings: 0, approvedHours, pendingHours });
+      } catch (err) {
+        // handle error
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchOvertime();
+  }, []);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -56,9 +68,69 @@ export default function OvertimeScreen() {
     }
   };
 
-  const handleSubmitOvertime = () => {
-    setShowModal(false);
-    Alert.alert('Success', 'Overtime request submitted successfully!');
+  // Helper to format time to HH:mm
+  const formatTime = (dateObj: Date) => {
+    const hh = String(dateObj.getHours()).padStart(2, '0');
+    const mm = String(dateObj.getMinutes()).padStart(2, '0');
+    return `${hh}:${mm}`;
+  };
+
+  // Calculate hours difference
+  const calculateHours = (start: string, end: string) => {
+    if (!start || !end) return '';
+    const [sh, sm] = start.split(':').map(Number);
+    const [eh, em] = end.split(':').map(Number);
+    let diff = (eh + em / 60) - (sh + sm / 60);
+    if (diff < 0) diff += 24; // handle overnight
+    return diff.toFixed(2);
+  };
+
+  const handleSubmitOvertime = async () => {
+    if (!type || !date || !reason) {
+      Alert.alert('Error', 'Please fill all fields.');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const token = await AsyncStorage.getItem('auth_token');
+      if (!token) throw new Error('No auth token');
+      const payload = {
+        type,
+        date,
+        reason,
+      };
+      const response = await fetch('https://crm.highlander.co.id/api/leave-overtime', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+      const resData = await response.json();
+      if (response.status === 201) {
+        Alert.alert('Success', 'Request submitted successfully!');
+        setShowModal(false);
+        // Refetch overtime data
+        const refetch = await fetch('https://crm.highlander.co.id/api/leave-overtime?per_page=10', {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/json',
+          },
+        });
+        const refetchResult = await refetch.json();
+        const dataArr = Array.isArray(refetchResult.data) ? refetchResult.data : (refetchResult.data?.data || []);
+        setOvertimeHistory(dataArr);
+      } else {
+        Alert.alert('Error', resData.message || 'Failed to submit request.');
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Failed to submit request.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -120,39 +192,84 @@ export default function OvertimeScreen() {
       <ThemedView style={styles.section}>
         <ThemedText style={styles.sectionTitle}>Recent Overtime</ThemedText>
         <ThemedView style={styles.historyContainer}>
-          {overtimeHistory.map((overtime) => (
-            <ThemedView key={overtime.id} style={styles.historyItem}>
-              <ThemedView style={styles.historyHeader}>
-                <ThemedView style={styles.historyLeft}>
-                  <ThemedView style={[styles.statusDot, { backgroundColor: getStatusColor(overtime.status) }]} />
-                  <ThemedView style={styles.historyInfo}>
-                    <ThemedText style={styles.historyDate}>{overtime.date}</ThemedText>
-                    <ThemedText style={styles.historyReason}>{overtime.reason}</ThemedText>
+          {loading ? (
+            <ThemedText>Loading...</ThemedText>
+          ) : overtimeHistory.length === 0 ? (
+            <ThemedText>No overtime records found.</ThemedText>
+          ) : overtimeHistory.map((overtime) => {
+            const handleDelete = async () => {
+              Alert.alert(
+                'Delete Confirmation',
+                'Are you sure you want to delete this overtime request?',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: async () => {
+                      try {
+                        const token = await AsyncStorage.getItem('auth_token');
+                        if (!token) throw new Error('No auth token');
+                        const response = await fetch(`https://crm.highlander.co.id/api/leave-overtime/${overtime.id}`, {
+                          method: 'DELETE',
+                          headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Accept': 'application/json',
+                          },
+                        });
+                        const resData = await response.json();
+                        if (response.ok) {
+                          Alert.alert('Success', resData.message || 'Overtime deleted successfully!');
+                          setOvertimeHistory((prev) => prev.filter((item) => item.id !== overtime.id));
+                        } else {
+                          Alert.alert('Error', resData.message || 'Failed to delete overtime.');
+                        }
+                      } catch (err: any) {
+                        Alert.alert('Error', err.message || 'Failed to delete overtime.');
+                      }
+                    },
+                  },
+                ]
+              );
+            };
+            return (
+              <ThemedView key={overtime.id} style={styles.historyItem}>
+                <ThemedView style={styles.historyHeader}>
+                  <ThemedView style={styles.historyLeft}>
+                    <ThemedView style={[styles.statusDot, { backgroundColor: getStatusColor(overtime.status) }]} />
+                    <ThemedView style={styles.historyInfo}>
+                      <ThemedText style={styles.historyDate}>{overtime.date}</ThemedText>
+                      <ThemedText style={styles.historyReason}>{overtime.reason}</ThemedText>
+                    </ThemedView>
+                  </ThemedView>
+                  <ThemedView style={styles.historyRight}>
+                    <ThemedView style={[styles.statusBadge, { backgroundColor: getStatusColor(overtime.status) }]}>
+                      <ThemedText style={styles.statusText}>{overtime.status}</ThemedText>
+                    </ThemedView>
+                    {overtime.status === 'pending' && (
+                      <TouchableOpacity onPress={handleDelete} style={{ marginTop: 8 }}>
+                        <ThemedText style={{ color: '#EF4444', fontSize: 12 }}>Delete</ThemedText>
+                      </TouchableOpacity>
+                    )}
                   </ThemedView>
                 </ThemedView>
-                <ThemedView style={styles.historyRight}>
-                  <ThemedView style={[styles.statusBadge, { backgroundColor: getStatusColor(overtime.status) }]}>
-                    <ThemedText style={styles.statusText}>{overtime.status}</ThemedText>
+                <ThemedView style={styles.historyDetails}>
+                  <ThemedView style={styles.detailRow}>
+                    <ThemedText style={styles.detailLabel}>Type:</ThemedText>
+                    <ThemedText style={styles.detailValue}>{overtime.type || '-'}</ThemedText>
+                  </ThemedView>
+                  <ThemedView style={styles.detailRow}>
+                    <ThemedText style={styles.detailLabel}>Reason:</ThemedText>
+                    <ThemedText style={styles.detailValue}>{overtime.reason}</ThemedText>
+                  </ThemedView>
+                  <ThemedView style={styles.detailRow}>
+                    <ThemedText style={styles.detailLabel}>Status:</ThemedText>
+                    <ThemedText style={styles.detailValue}>{overtime.status}</ThemedText>
                   </ThemedView>
                 </ThemedView>
               </ThemedView>
-              
-              <ThemedView style={styles.historyDetails}>
-                <ThemedView style={styles.detailRow}>
-                  <ThemedText style={styles.detailLabel}>Hours:</ThemedText>
-                  <ThemedText style={styles.detailValue}>{overtime.hours}h</ThemedText>
-                </ThemedView>
-                <ThemedView style={styles.detailRow}>
-                  <ThemedText style={styles.detailLabel}>Rate:</ThemedText>
-                  <ThemedText style={styles.detailValue}>{overtime.rate}</ThemedText>
-                </ThemedView>
-                <ThemedView style={styles.detailRow}>
-                  <ThemedText style={styles.detailLabel}>Total:</ThemedText>
-                  <ThemedText style={[styles.detailValue, styles.totalAmount]}>{overtime.total}</ThemedText>
-                </ThemedView>
-              </ThemedView>
-            </ThemedView>
-          ))}
+            );
+          })}
         </ThemedView>
       </ThemedView>
 
@@ -166,45 +283,94 @@ export default function OvertimeScreen() {
         <ThemedView style={styles.modalOverlay}>
           <ThemedView style={styles.modalContent}>
             <ThemedText style={styles.modalTitle}>Submit Overtime Request</ThemedText>
-            
+            {/* Type Picker */}
             <ThemedView style={styles.formGroup}>
-              <ThemedText style={styles.formLabel}>Date</ThemedText>
-              <TouchableOpacity style={styles.formInput}>
-                <ThemedText style={styles.inputText}>Select date</ThemedText>
-                <IconSymbol name="calendar" size={16} color="#6B7280" />
-              </TouchableOpacity>
-            </ThemedView>
-
-            <ThemedView style={styles.formGroup}>
-              <ThemedText style={styles.formLabel}>Start Time</ThemedText>
-              <TouchableOpacity style={styles.formInput}>
-                <ThemedText style={styles.inputText}>Select start time</ThemedText>
-                <IconSymbol name="clock" size={16} color="#6B7280" />
-              </TouchableOpacity>
-            </ThemedView>
-
-            <ThemedView style={styles.formGroup}>
-              <ThemedText style={styles.formLabel}>End Time</ThemedText>
-              <TouchableOpacity style={styles.formInput}>
-                <ThemedText style={styles.inputText}>Select end time</ThemedText>
-                <IconSymbol name="clock" size={16} color="#6B7280" />
-              </TouchableOpacity>
-            </ThemedView>
-
-            <ThemedView style={styles.formGroup}>
-              <ThemedText style={styles.formLabel}>Total Hours</ThemedText>
-              <ThemedView style={styles.formInput}>
-                <ThemedText style={styles.calculatedHours}>3.5 hours</ThemedText>
+              <ThemedText style={styles.formLabel}>Type</ThemedText>
+              <ThemedView style={{ flexDirection: 'row', gap: 8 }}>
+                <TouchableOpacity
+                  style={[
+                    styles.formInput,
+                    {
+                      flex: 1,
+                      borderColor: type === 'leave' ? '#8B5CF6' : '#E5E7EB',
+                      backgroundColor: type === 'leave' ? '#F3F0FF' : 'white',
+                    },
+                  ]}
+                  onPress={() => setType('leave')}
+                  disabled={submitting}
+                  activeOpacity={0.85}
+                >
+                  <ThemedText style={[
+                    styles.inputText,
+                    {
+                      color: type === 'leave' ? '#7C3AED' : '#6B7280',
+                      fontWeight: type === 'leave' ? 'bold' : 'normal',
+                    },
+                  ]}>Leave</ThemedText>
+                  {type === 'leave' && <IconSymbol name="checkmark" size={16} color="#7C3AED" />}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.formInput,
+                    {
+                      flex: 1,
+                      borderColor: type === 'overtime' ? '#8B5CF6' : '#E5E7EB',
+                      backgroundColor: type === 'overtime' ? '#F3F0FF' : 'white',
+                    },
+                  ]}
+                  onPress={() => setType('overtime')}
+                  disabled={submitting}
+                  activeOpacity={0.85}
+                >
+                  <ThemedText style={[
+                    styles.inputText,
+                    {
+                      color: type === 'overtime' ? '#7C3AED' : '#6B7280',
+                      fontWeight: type === 'overtime' ? 'bold' : 'normal',
+                    },
+                  ]}>Overtime</ThemedText>
+                  {type === 'overtime' && <IconSymbol name="checkmark" size={16} color="#7C3AED" />}
+                </TouchableOpacity>
               </ThemedView>
             </ThemedView>
-
+            {/* Date Picker */}
+            <ThemedView style={styles.formGroup}>
+              <ThemedText style={styles.formLabel}>Date</ThemedText>
+              <TouchableOpacity style={styles.formInput} onPress={() => setShowDatePicker(true)}>
+                <ThemedText style={styles.inputText}>{date ? date : 'Select date'}</ThemedText>
+                <IconSymbol name="calendar" size={16} color="#6B7280" />
+              </TouchableOpacity>
+              {showDatePicker && (
+                <DateTimePicker
+                  value={date ? new Date(date) : new Date()}
+                  mode="date"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  onChange={(event: any, selectedDate?: Date | undefined) => {
+                    setShowDatePicker(false);
+                    if (selectedDate) {
+                      const yyyy = selectedDate.getFullYear();
+                      const mm = String(selectedDate.getMonth() + 1).padStart(2, '0');
+                      const dd = String(selectedDate.getDate()).padStart(2, '0');
+                      setDate(`${yyyy}-${mm}-${dd}`);
+                    }
+                  }}
+                />
+              )}
+            </ThemedView>
+            {/* Reason */}
             <ThemedView style={styles.formGroup}>
               <ThemedText style={styles.formLabel}>Reason</ThemedText>
-              <TouchableOpacity style={[styles.formInput, styles.textArea]}>
-                <ThemedText style={styles.inputText}>Enter reason for overtime</ThemedText>
-              </TouchableOpacity>
+              <TextInput
+                style={[styles.formInput, styles.textArea, { color: '#1F2937', textAlignVertical: 'top' }]}
+                placeholder="Enter reason for overtime"
+                placeholderTextColor="#6B7280"
+                value={reason}
+                onChangeText={setReason}
+                multiline
+                numberOfLines={3}
+                autoCapitalize="sentences"
+              />
             </ThemedView>
-
             <ThemedView style={styles.modalButtons}>
               <TouchableOpacity 
                 style={[styles.modalButton, styles.cancelButton]} 
@@ -213,14 +379,15 @@ export default function OvertimeScreen() {
                 <ThemedText style={styles.cancelButtonText}>Cancel</ThemedText>
               </TouchableOpacity>
               <TouchableOpacity 
-                style={[styles.modalButton, styles.submitModalButton]} 
+                style={[styles.modalButton, styles.submitModalButton, submitting && { opacity: 0.6 }]} 
                 onPress={handleSubmitOvertime}
+                disabled={submitting}
               >
                 <LinearGradient
                   colors={['#8B5CF6', '#7C3AED']}
                   style={styles.submitModalGradient}
                 >
-                  <ThemedText style={styles.submitModalButtonText}>Submit</ThemedText>
+                  <ThemedText style={styles.submitModalButtonText}>{submitting ? 'Submitting...' : 'Submit'}</ThemedText>
                 </LinearGradient>
               </TouchableOpacity>
             </ThemedView>
