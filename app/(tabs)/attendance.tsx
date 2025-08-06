@@ -30,7 +30,7 @@ const AttendanceScreen: React.FC = () => {
   const [hasMore, setHasMore] = useState(true);
   const [lastAttendance, setLastAttendance] = useState<any | null>(null);
   // Weekly stats state
-  const [weekStats, setWeekStats] = useState({ hours: 0, daysPresent: 0, lateDays: 0 });
+  const [weekStats, setWeekStats] = useState({ hours: 0, lateDays: 0 });
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [locationReason, setLocationReason] = useState('Arrived at office');
   const [showLocationInput, setShowLocationInput] = useState(false);
@@ -139,15 +139,11 @@ const AttendanceScreen: React.FC = () => {
     sunday.setHours(23, 59, 59, 999);
 
     let hours = 0;
-    let daysPresent = 0;
     let lateDays = 0;
     attendanceHistory.forEach((rec) => {
       // Parse record date
       const recDate = new Date(rec.date);
       if (recDate >= monday && recDate <= sunday) {
-        if (rec.status === 1 || rec.status === 2) {
-          daysPresent++;
-        }
         if (rec.status === 2) {
           lateDays++;
         }
@@ -156,7 +152,7 @@ const AttendanceScreen: React.FC = () => {
         }
       }
     });
-    setWeekStats({ hours, daysPresent, lateDays });
+    setWeekStats({ hours, lateDays });
   }, [attendanceHistory]);
 
   // Infinite scroll handler
@@ -421,10 +417,6 @@ const AttendanceScreen: React.FC = () => {
           <ThemedView style={[styles.statBox, { backgroundColor: theme.card }]}> 
             <ThemedText style={styles.statNumber}>{weekStats.hours.toFixed(1)}</ThemedText>
             <ThemedText style={styles.statLabel}>Hours</ThemedText>
-          </ThemedView>
-          <ThemedView style={styles.statBox}>
-            <ThemedText style={styles.statNumber}>{weekStats.daysPresent}</ThemedText>
-            <ThemedText style={styles.statLabel}>Days Present</ThemedText>
           </ThemedView>
           <ThemedView style={styles.statBox}>
             <ThemedText style={styles.statNumber}>{weekStats.lateDays}</ThemedText>
