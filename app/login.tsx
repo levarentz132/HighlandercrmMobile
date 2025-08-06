@@ -10,7 +10,7 @@ export default function LoginScreen({ onLogin }: { onLogin: () => void }) {
   const handleLogin = async () => {
     setLoading(true);
     try {
-      const response = await fetch('http://crm.highlander.co.id/api/login', {
+      const response = await fetch('https://crm.highlander.co.id/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),

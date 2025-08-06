@@ -19,7 +19,7 @@ export default function DashboardScreen() {
       try {
         const token = await AsyncStorage.getItem('auth_token');
         if (!token) return;
-        const response = await fetch('http://crm.highlander.co.id/api/user', {
+        const response = await fetch('https://crm.highlander.co.id/api/user', {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${token}`,
