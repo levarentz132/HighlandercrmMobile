@@ -10,6 +10,22 @@ import { Alert, Dimensions, Modal, Platform, ScrollView, StyleSheet, TextInput, 
 const { width } = Dimensions.get('window');
 
 export default function OvertimeScreen() {
+  // Helper to format ISO date string (with or without sub-milliseconds/Z) to 'YYYY-MM-DD HH:mm'
+  const formatDate = (iso: string) => {
+    if (!iso) return '';
+    let cleanIso = iso;
+    if (iso.includes('.')) {
+      cleanIso = iso.replace(/\.[0-9]+Z$/, 'Z');
+    }
+    const d = new Date(cleanIso);
+    if (isNaN(d.getTime())) return iso;
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    const hh = String(d.getHours()).padStart(2, '0');
+    const min = String(d.getMinutes()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd} ${hh}:${min}`;
+  };
   const [showModal, setShowModal] = useState(false);
   const [overtimeHistory, setOvertimeHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -19,10 +35,10 @@ export default function OvertimeScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [reason, setReason] = useState('');
   const [monthlyStats, setMonthlyStats] = useState({
-    totalHours: 0,
-    totalEarnings: 0,
-    approvedHours: 0,
-    pendingHours: 0,
+    overtimeTotal: 0,
+    overtimePending: 0,
+    permitTotal: 0,
+    permitPending: 0,
   });
   // Fetch overtime data from API
   useEffect(() => {
@@ -42,14 +58,18 @@ export default function OvertimeScreen() {
         // Laravel paginator: result.data is array, result.total, result.current_page, etc.
         const dataArr = Array.isArray(result.data) ? result.data : (result.data?.data || []);
         setOvertimeHistory(dataArr);
-        // Calculate monthly stats from data
-        let totalHours = 0, approvedHours = 0, pendingHours = 0;
+        // Calculate stats: how many overtime and permit submitted, and how many are pending
+        let overtimeTotal = 0, overtimePending = 0, permitTotal = 0, permitPending = 0;
         dataArr.forEach((item: any) => {
-          totalHours += Number(item.hours) || 0;
-          if (item.status === 'approved') approvedHours += Number(item.hours) || 0;
-          if (item.status === 'pending') pendingHours += Number(item.hours) || 0;
+          if (item.type === 'overtime') {
+            overtimeTotal++;
+            if (item.status === 'pending') overtimePending++;
+          } else if (item.type === 'leave' || item.type === 'permit') {
+            permitTotal++;
+            if (item.status === 'pending') permitPending++;
+          }
         });
-        setMonthlyStats({ totalHours, totalEarnings: 0, approvedHours, pendingHours });
+        setMonthlyStats({ overtimeTotal, overtimePending, permitTotal, permitPending });
       } catch (err) {
         // handle error
       } finally {
@@ -156,36 +176,9 @@ export default function OvertimeScreen() {
             style={styles.submitGradient}
           >
             <IconSymbol name="plus.circle.fill" size={24} color="white" />
-            <ThemedText style={styles.submitButtonText}>Submit Overtime</ThemedText>
+            <ThemedText style={styles.submitButtonText}>Submit Lembur / Dinas</ThemedText>
           </LinearGradient>
         </TouchableOpacity>
-      </ThemedView>
-
-      {/* Monthly Overview */}
-      <ThemedView style={styles.section}>
-        <ThemedText style={styles.sectionTitle}>This Month Overview</ThemedText>
-        <ThemedView style={styles.overviewCard}>
-          <ThemedView style={styles.overviewRow}>
-            <ThemedView style={styles.overviewItem}>
-              <ThemedText style={styles.overviewValue}>{monthlyStats.totalHours}h</ThemedText>
-              <ThemedText style={styles.overviewLabel}>Total Hours</ThemedText>
-            </ThemedView>
-            <ThemedView style={styles.overviewItem}>
-              <ThemedText style={styles.overviewValue}>${monthlyStats.totalEarnings}</ThemedText>
-              <ThemedText style={styles.overviewLabel}>Total Earnings</ThemedText>
-            </ThemedView>
-          </ThemedView>
-          <ThemedView style={styles.overviewRow}>
-            <ThemedView style={styles.overviewItem}>
-              <ThemedText style={[styles.overviewValue, { color: '#10B981' }]}>{monthlyStats.approvedHours}h</ThemedText>
-              <ThemedText style={styles.overviewLabel}>Approved</ThemedText>
-            </ThemedView>
-            <ThemedView style={styles.overviewItem}>
-              <ThemedText style={[styles.overviewValue, { color: '#F59E0B' }]}>{monthlyStats.pendingHours}h</ThemedText>
-              <ThemedText style={styles.overviewLabel}>Pending</ThemedText>
-            </ThemedView>
-          </ThemedView>
-        </ThemedView>
       </ThemedView>
 
       {/* Overtime History */}
@@ -238,7 +231,7 @@ export default function OvertimeScreen() {
                   <ThemedView style={styles.historyLeft}>
                     <ThemedView style={[styles.statusDot, { backgroundColor: getStatusColor(overtime.status) }]} />
                     <ThemedView style={styles.historyInfo}>
-                      <ThemedText style={styles.historyDate}>{overtime.date}</ThemedText>
+                      <ThemedText style={styles.historyDate}>{formatDate(overtime.date)}</ThemedText>
                       <ThemedText style={styles.historyReason}>{overtime.reason}</ThemedText>
                     </ThemedView>
                   </ThemedView>
@@ -306,7 +299,7 @@ export default function OvertimeScreen() {
                       color: type === 'leave' ? '#7C3AED' : '#6B7280',
                       fontWeight: type === 'leave' ? 'bold' : 'normal',
                     },
-                  ]}>Leave</ThemedText>
+                  ]}>Dinas</ThemedText>
                   {type === 'leave' && <IconSymbol name="checkmark" size={16} color="#7C3AED" />}
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -328,7 +321,7 @@ export default function OvertimeScreen() {
                       color: type === 'overtime' ? '#7C3AED' : '#6B7280',
                       fontWeight: type === 'overtime' ? 'bold' : 'normal',
                     },
-                  ]}>Overtime</ThemedText>
+                  ]}>Lembur</ThemedText>
                   {type === 'overtime' && <IconSymbol name="checkmark" size={16} color="#7C3AED" />}
                 </TouchableOpacity>
               </ThemedView>
