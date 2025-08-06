@@ -163,7 +163,7 @@ export default function OvertimeScreen() {
         style={styles.header}
       >
         <ThemedView style={styles.headerContent}>
-          <ThemedText style={styles.headerTitle}>Overtime Management</ThemedText>
+          <ThemedText style={styles.headerTitle}>Lembur & Dinas Management</ThemedText>
           <ThemedText style={styles.headerSubtitle}>Track and request overtime hours</ThemedText>
         </ThemedView>
       </LinearGradient>

@@ -45,29 +45,22 @@ export default function TabLayout() {
       <Tabs.Screen
         name="attendance"
         options={{
-          title: 'Attendance',
+          title: 'Check In/Out',
           tabBarIcon: ({ color }) => <IconSymbol size={24} name="clock.fill" color={color} />,
         }}
       />
       <Tabs.Screen
         name="leaves"
         options={{
-          title: 'Leaves',
+          title: 'Izin/Cuti',
           tabBarIcon: ({ color }) => <IconSymbol size={24} name="calendar.badge.clock" color={color} />,
         }}
       />
       <Tabs.Screen
-        name="crm"
+        name="overtime"
         options={{
-          title: 'CRM',
+          title: 'Lembur/Dinas',
           tabBarIcon: ({ color }) => <IconSymbol size={24} name="person.3.fill" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: 'Profile',
-          tabBarIcon: ({ color }) => <IconSymbol size={24} name="person.circle.fill" color={color} />,
         }}
       />
     </Tabs>
