@@ -1,9 +1,11 @@
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { IconSymbol } from '@/components/ui/IconSymbol';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useState } from 'react';
-import { Alert, Dimensions, Modal, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Alert, Dimensions, Modal, Platform, ScrollView, StyleSheet, TextInput, TouchableOpacity } from 'react-native';
 
 const { width } = Dimensions.get('window');
 
@@ -11,38 +13,46 @@ export default function LeavesScreen() {
   const [showModal, setShowModal] = useState(false);
   
   const leaveTypes = [
-    { id: 1, title: 'Annual Leave', available: 15, used: 5, color: '#10B981' },
-    { id: 2, title: 'Sick Leave', available: 10, used: 2, color: '#F59E0B' },
-    { id: 3, title: 'Personal Leave', available: 5, used: 1, color: '#8B5CF6' },
-    { id: 4, title: 'Emergency Leave', available: 3, used: 0, color: '#EF4444' },
+    { id: 2, title: 'Sakit', color: '#F59E0B' },
+    { id: 3, title: 'Alpha', color: '#8B5CF6' },
+    { id: 4, title: 'Cuti Tahunan', color: '#10B981' },
   ];
 
-  const leaveHistory = [
-    { 
-      id: 1, 
-      type: 'Annual Leave', 
-      dates: 'Aug 10-12, 2025', 
-      days: 3, 
-      status: 'approved',
-      reason: 'Family vacation'
-    },
-    { 
-      id: 2, 
-      type: 'Sick Leave', 
-      dates: 'Jul 25, 2025', 
-      days: 1, 
-      status: 'approved',
-      reason: 'Medical appointment'
-    },
-    { 
-      id: 3, 
-      type: 'Personal Leave', 
-      dates: 'Jul 15, 2025', 
-      days: 1, 
-      status: 'pending',
-      reason: 'Personal matters'
-    },
-  ];
+  const [leaveHistory, setLeaveHistory] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  // Form state
+  // Always default to a valid leave type (2 = Sakit)
+  const [selectedType, setSelectedType] = useState<number>(2);
+  const [date, setDate] = useState<string>('');
+  const [reason, setReason] = useState('');
+  const [showDatePicker, setShowDatePicker] = useState(false);
+
+  // Fetch leave (izin) data from API
+  useEffect(() => {
+    const fetchLeaves = async () => {
+      setLoading(true);
+      try {
+        const token = await AsyncStorage.getItem('auth_token');
+        if (!token) return;
+        const response = await fetch('https://crm.highlander.co.id/api/attendance/izin?per_page=10', {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/json',
+          },
+        });
+        const result = await response.json();
+        // ...existing code...
+        setLeaveHistory(Array.isArray(result.data) ? result.data : []);
+      } catch (err) {
+        // ...existing code...
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchLeaves();
+  }, []);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -54,12 +64,58 @@ export default function LeavesScreen() {
   };
 
   const handleApplyLeave = () => {
+    setSelectedType(2); // Default to Sakit
+    setDate('');
+    setReason('');
     setShowModal(true);
   };
 
-  const submitLeaveRequest = () => {
-    setShowModal(false);
-    Alert.alert('Success', 'Leave request submitted successfully!');
+  const submitLeaveRequest = async () => {
+    // Debug log for form values (use 'type' instead of 'selectedType' for clarity)
+    if (typeof selectedType !== 'number' || ![2, 3, 4].includes(selectedType) || !date || !reason) {
+      Alert.alert('Error', 'Please fill all fields.');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const token = await AsyncStorage.getItem('auth_token');
+      if (!token) throw new Error('No auth token');
+      const payload = {
+        type: selectedType,
+        date,
+        reason,
+      };
+      const response = await fetch('https://crm.highlander.co.id/api/attendance/izin', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+      const resData = await response.json();
+      if (resData.success) {
+        Alert.alert('Success', resData.message || 'Leave request submitted successfully!');
+        setShowModal(false);
+        // Refetch leave data
+        const refetch = await fetch('https://crm.highlander.co.id/api/attendance/izin?per_page=10', {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/json',
+          },
+        });
+        const refetchResult = await refetch.json();
+        setLeaveHistory(Array.isArray(refetchResult.data) ? refetchResult.data : []);
+      } else {
+        Alert.alert('Error', resData.message || 'Failed to submit leave request.');
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Failed to submit leave request.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -90,59 +146,45 @@ export default function LeavesScreen() {
         </TouchableOpacity>
       </ThemedView>
 
-      {/* Leave Balance */}
-      <ThemedView style={styles.section}>
-        <ThemedText style={styles.sectionTitle}>Leave Balance</ThemedText>
-        <ThemedView style={styles.balanceGrid}>
-          {leaveTypes.map((leave) => (
-            <ThemedView key={leave.id} style={[styles.balanceCard, { borderLeftColor: leave.color }]}>
-              <ThemedText style={styles.balanceTitle}>{leave.title}</ThemedText>
-              <ThemedView style={styles.balanceNumbers}>
-                <ThemedText style={styles.balanceAvailable}>
-                  {leave.available - leave.used} left
-                </ThemedText>
-                <ThemedText style={styles.balanceUsed}>
-                  {leave.used} used of {leave.available}
-                </ThemedText>
-              </ThemedView>
-              <ThemedView style={styles.progressBar}>
-                <ThemedView 
-                  style={[
-                    styles.progressFill, 
-                    { 
-                      width: `${(leave.used / leave.available) * 100}%`,
-                      backgroundColor: leave.color 
-                    }
-                  ]} 
-                />
-              </ThemedView>
-            </ThemedView>
-          ))}
-        </ThemedView>
-      </ThemedView>
+      {/* Leave Balance section removed for Sakit, Alpha, Cuti Tahunan */}
 
       {/* Leave History */}
       <ThemedView style={styles.section}>
         <ThemedText style={styles.sectionTitle}>Recent Requests</ThemedText>
         <ThemedView style={styles.historyContainer}>
-          {leaveHistory.map((leave) => (
-            <ThemedView key={leave.id} style={styles.historyItem}>
-              <ThemedView style={styles.historyLeft}>
-                <ThemedView style={[styles.statusDot, { backgroundColor: getStatusColor(leave.status) }]} />
-                <ThemedView style={styles.historyInfo}>
-                  <ThemedText style={styles.historyType}>{leave.type}</ThemedText>
-                  <ThemedText style={styles.historyDates}>{leave.dates}</ThemedText>
-                  <ThemedText style={styles.historyReason}>{leave.reason}</ThemedText>
+          {loading ? (
+            <ThemedText>Loading...</ThemedText>
+          ) : leaveHistory.length === 0 ? (
+            <ThemedText>No leave records found.</ThemedText>
+          ) : leaveHistory.map((leave) => {
+            // Map type and status to readable labels
+            let typeLabel = 'Other';
+            if (leave.type === 2) typeLabel = 'Sick Leave';
+            else if (leave.type === 3) typeLabel = 'Alpha';
+            else if (leave.type === 4) typeLabel = 'Annual Leave';
+
+            let statusLabel = 'pending';
+            if (leave.status === 1) statusLabel = 'approved';
+            else if (leave.status === 2) statusLabel = 'rejected';
+
+            return (
+              <ThemedView key={leave.id} style={styles.historyItem}>
+                <ThemedView style={styles.historyLeft}>
+                  <ThemedView style={[styles.statusDot, { backgroundColor: getStatusColor(statusLabel) }]} />
+                  <ThemedView style={styles.historyInfo}>
+                    <ThemedText style={styles.historyType}>{typeLabel}</ThemedText>
+                    <ThemedText style={styles.historyDates}>{leave.date}</ThemedText>
+                    <ThemedText style={styles.historyReason}>{leave.location_reason}</ThemedText>
+                  </ThemedView>
+                </ThemedView>
+                <ThemedView style={styles.historyRight}>
+                  <ThemedView style={[styles.statusBadge, { backgroundColor: getStatusColor(statusLabel) }]}>
+                    <ThemedText style={styles.statusText}>{statusLabel}</ThemedText>
+                  </ThemedView>
                 </ThemedView>
               </ThemedView>
-              <ThemedView style={styles.historyRight}>
-                <ThemedView style={[styles.statusBadge, { backgroundColor: getStatusColor(leave.status) }]}>
-                  <ThemedText style={styles.statusText}>{leave.status}</ThemedText>
-                </ThemedView>
-                <ThemedText style={styles.historyDays}>{leave.days} day{leave.days > 1 ? 's' : ''}</ThemedText>
-              </ThemedView>
-            </ThemedView>
-          ))}
+            );
+          })}
         </ThemedView>
       </ThemedView>
 
@@ -159,33 +201,63 @@ export default function LeavesScreen() {
             
             <ThemedView style={styles.formGroup}>
               <ThemedText style={styles.formLabel}>Leave Type</ThemedText>
-              <TouchableOpacity style={styles.formInput}>
-                <ThemedText style={styles.inputText}>Select leave type</ThemedText>
-                <IconSymbol name="chevron.down" size={16} color="#6B7280" />
-              </TouchableOpacity>
+              {(Array.isArray(leaveTypes) ? leaveTypes : []).map((type) => (
+                <TouchableOpacity
+                  key={type.id}
+                  style={[styles.formInput, selectedType === type.id && { borderColor: type.color }]}
+                  onPress={() => setSelectedType(type.id)}
+                  disabled={submitting}
+                >
+                  <ThemedText style={[styles.inputText, selectedType === type.id && { color: type.color, fontWeight: 'bold' }]}>{type.title}</ThemedText>
+                  {selectedType === type.id && <IconSymbol name="checkmark" size={16} color={type.color} />}
+                </TouchableOpacity>
+              ))}
             </ThemedView>
 
             <ThemedView style={styles.formGroup}>
-              <ThemedText style={styles.formLabel}>Start Date</ThemedText>
-              <TouchableOpacity style={styles.formInput}>
-                <ThemedText style={styles.inputText}>Select start date</ThemedText>
+              <ThemedText style={styles.formLabel}>Date</ThemedText>
+              <TouchableOpacity
+                style={styles.formInput}
+                onPress={() => setShowDatePicker(true)}
+                activeOpacity={0.7}
+              >
+                <ThemedText style={[styles.inputText, { color: date ? '#1F2937' : '#6B7280' }]}> {date ? date : 'Select date'} </ThemedText>
                 <IconSymbol name="calendar" size={16} color="#6B7280" />
               </TouchableOpacity>
-            </ThemedView>
-
-            <ThemedView style={styles.formGroup}>
-              <ThemedText style={styles.formLabel}>End Date</ThemedText>
-              <TouchableOpacity style={styles.formInput}>
-                <ThemedText style={styles.inputText}>Select end date</ThemedText>
-                <IconSymbol name="calendar" size={16} color="#6B7280" />
-              </TouchableOpacity>
+              {showDatePicker && (
+                <DateTimePicker
+                  value={date ? new Date(date) : new Date()}
+                  mode="date"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  onChange={(
+                    event: any,
+                    selectedDate?: Date | undefined
+                  ) => {
+                    setShowDatePicker(false);
+                    if (selectedDate) {
+                      // Format to YYYY-MM-DD
+                      const yyyy = selectedDate.getFullYear();
+                      const mm = String(selectedDate.getMonth() + 1).padStart(2, '0');
+                      const dd = String(selectedDate.getDate()).padStart(2, '0');
+                      setDate(`${yyyy}-${mm}-${dd}`);
+                    }
+                  }}
+                />
+              )}
             </ThemedView>
 
             <ThemedView style={styles.formGroup}>
               <ThemedText style={styles.formLabel}>Reason</ThemedText>
-              <TouchableOpacity style={[styles.formInput, styles.textArea]}>
-                <ThemedText style={styles.inputText}>Enter reason for leave</ThemedText>
-              </TouchableOpacity>
+              <TextInput
+                style={[styles.formInput, styles.textArea, { color: '#1F2937', textAlignVertical: 'top' }]}
+                placeholder="Enter reason for leave"
+                placeholderTextColor="#6B7280"
+                value={reason}
+                onChangeText={setReason}
+                multiline
+                numberOfLines={3}
+                autoCapitalize="sentences"
+              />
             </ThemedView>
 
             <ThemedView style={styles.modalButtons}>
@@ -196,14 +268,15 @@ export default function LeavesScreen() {
                 <ThemedText style={styles.cancelButtonText}>Cancel</ThemedText>
               </TouchableOpacity>
               <TouchableOpacity 
-                style={[styles.modalButton, styles.submitButton]} 
+                style={[styles.modalButton, styles.submitButton, (submitting || typeof selectedType !== 'number' || ![2,3,4].includes(selectedType)) && { opacity: 0.6 }]} 
                 onPress={submitLeaveRequest}
+                disabled={submitting || typeof selectedType !== 'number' || ![2,3,4].includes(selectedType)}
               >
                 <LinearGradient
                   colors={['#10B981', '#059669']}
                   style={styles.submitGradient}
                 >
-                  <ThemedText style={styles.submitButtonText}>Submit</ThemedText>
+                  <ThemedText style={styles.submitButtonText}>{submitting ? 'Submitting...' : 'Submit'}</ThemedText>
                 </LinearGradient>
               </TouchableOpacity>
             </ThemedView>
