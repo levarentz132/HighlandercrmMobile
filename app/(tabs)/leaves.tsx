@@ -128,7 +128,7 @@ export default function LeavesScreen() {
         style={styles.header}
       >
         <ThemedView style={styles.headerContent}>
-          <ThemedText style={styles.headerTitle}>Leave Management</ThemedText>
+          <ThemedText style={styles.headerTitle}>Izin Sakit / Cuti</ThemedText>
           <ThemedText style={styles.headerSubtitle}>Manage your time off requests</ThemedText>
         </ThemedView>
       </LinearGradient>
@@ -141,7 +141,7 @@ export default function LeavesScreen() {
             style={styles.applyGradient}
           >
             <IconSymbol name="calendar.badge.plus" size={24} color="white" />
-            <ThemedText style={styles.applyButtonText}>Apply for Leave</ThemedText>
+            <ThemedText style={styles.applyButtonText}>Apply for Izin Sakit / Cuti</ThemedText>
           </LinearGradient>
         </TouchableOpacity>
       </ThemedView>
@@ -159,13 +159,51 @@ export default function LeavesScreen() {
           ) : leaveHistory.map((leave) => {
             // Map type and status to readable labels
             let typeLabel = 'Other';
-            if (leave.type === 2) typeLabel = 'Sick Leave';
+            if (leave.type === 2) typeLabel = 'Sakit';
             else if (leave.type === 3) typeLabel = 'Alpha';
-            else if (leave.type === 4) typeLabel = 'Annual Leave';
+            else if (leave.type === 4) typeLabel = 'Cuti Tahunan';
 
             let statusLabel = 'pending';
             if (leave.status === 1) statusLabel = 'approved';
             else if (leave.status === 2) statusLabel = 'rejected';
+
+            // Delete handler
+            const handleDelete = async () => {
+              Alert.alert(
+                'Delete Confirmation',
+                'Are you sure you want to delete this leave request?',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: async () => {
+                      try {
+                        const token = await AsyncStorage.getItem('auth_token');
+                        if (!token) throw new Error('No auth token');
+                        const response = await fetch(`https://crm.highlander.co.id/api/attendance/izin/${leave.id}`, {
+                          method: 'DELETE',
+                          headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Accept': 'application/json',
+                          },
+                        });
+                        const resData = await response.json();
+                        if (resData.success) {
+                          Alert.alert('Success', resData.message || 'Leave deleted successfully!');
+                          // Remove from UI
+                          setLeaveHistory((prev) => prev.filter((item) => item.id !== leave.id));
+                        } else {
+                          Alert.alert('Error', resData.message || 'Failed to delete leave.');
+                        }
+                      } catch (err: any) {
+                        Alert.alert('Error', err.message || 'Failed to delete leave.');
+                      }
+                    },
+                  },
+                ]
+              );
+            };
 
             return (
               <ThemedView key={leave.id} style={styles.historyItem}>
@@ -178,9 +216,15 @@ export default function LeavesScreen() {
                   </ThemedView>
                 </ThemedView>
                 <ThemedView style={styles.historyRight}>
-                  <ThemedView style={[styles.statusBadge, { backgroundColor: getStatusColor(statusLabel) }]}>
+                  <ThemedView style={[styles.statusBadge, { backgroundColor: getStatusColor(statusLabel) }]}> 
                     <ThemedText style={styles.statusText}>{statusLabel}</ThemedText>
                   </ThemedView>
+                  {/* Delete button, only show if status is pending */}
+                  {statusLabel === 'pending' && (
+                    <TouchableOpacity onPress={handleDelete} style={{ marginTop: 8 }}>
+                      <ThemedText style={{ color: '#EF4444', fontSize: 12 }}>Delete</ThemedText>
+                    </TouchableOpacity>
+                  )}
                 </ThemedView>
               </ThemedView>
             );
