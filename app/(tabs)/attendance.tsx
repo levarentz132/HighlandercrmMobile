@@ -443,24 +443,43 @@ const AttendanceScreen: React.FC = () => {
               }}
               scrollEventThrottle={200}
             >
-              {attendanceHistory.map((record, index) => (
-                <ThemedView key={index} style={styles.historyItem}>
-                  <ThemedView style={styles.historyLeft}>
-                    <ThemedView style={[styles.statusDot, { backgroundColor: getStatusColor(record.status) }]} />
-                    <ThemedView style={styles.historyInfo}>
-                      <ThemedText style={styles.historyDate}>{record.date}</ThemedText>
-                      <ThemedText style={styles.historyStatus}>{record.status === 1 ? 'present' : record.status === 2 ? 'late' : 'absent'}</ThemedText>
-                      {record.location_reason && (
-                        <ThemedText style={styles.locationReason}>{record.location_reason}</ThemedText>
-                      )}
+              {attendanceHistory.map((record, index) => {
+                let typeLabel = '';
+                switch (record.type) {
+                  case 1:
+                    typeLabel = 'Check In/Out';
+                    break;
+                  case 2:
+                    typeLabel = 'Sick';
+                    break;
+                  case 3:
+                    typeLabel = 'Alpha';
+                    break;
+                  case 4:
+                    typeLabel = 'Cuti Tahunan';
+                    break;
+                  default:
+                    typeLabel = 'Other';
+                }
+                return (
+                  <ThemedView key={index} style={styles.historyItem}>
+                    <ThemedView style={styles.historyLeft}>
+                      <ThemedView style={[styles.statusDot, { backgroundColor: getStatusColor(record.status) }]} />
+                      <ThemedView style={styles.historyInfo}>
+                        <ThemedText style={styles.historyDate}>{record.date}</ThemedText>
+                        <ThemedText style={styles.historyStatus}>{typeLabel}</ThemedText>
+                        {record.location_reason && (
+                          <ThemedText style={styles.locationReason}>{record.location_reason}</ThemedText>
+                        )}
+                      </ThemedView>
+                    </ThemedView>
+                    <ThemedView style={styles.historyRight}>
+                      <ThemedText style={styles.historyTime}>{record.clock_in_time || '-'} - {record.clock_out_time || '-'}</ThemedText>
+                      <ThemedText style={styles.historyHours}>{record.work_hours ? `${record.work_hours}h` : '-'}</ThemedText>
                     </ThemedView>
                   </ThemedView>
-                  <ThemedView style={styles.historyRight}>
-                    <ThemedText style={styles.historyTime}>{record.clock_in_time || '-'} - {record.clock_out_time || '-'}</ThemedText>
-                    <ThemedText style={styles.historyHours}>{record.work_hours ? `${record.work_hours}h` : '-'}</ThemedText>
-                  </ThemedView>
-                </ThemedView>
-              ))}
+                );
+              })}
               {loadingHistory && hasMore && (
                 <ThemedText style={{ textAlign: 'center', marginTop: 10 }}>Loading more...</ThemedText>
               )}
