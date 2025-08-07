@@ -95,7 +95,7 @@ export default function DashboardScreen() {
                 colors={[action.color, action.color + '80']}
                 style={styles.actionGradient}
               >
-                <IconSymbol name={action.icon as any} size={28} color="white" /> {/* Cast icon to any */}
+                <IconSymbol name={action.icon as any} size={28} color="white" />
                 <ThemedText style={styles.actionText}>{action.title}</ThemedText>
               </LinearGradient>
             </TouchableOpacity>

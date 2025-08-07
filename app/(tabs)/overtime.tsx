@@ -225,8 +225,20 @@ export default function OvertimeScreen() {
                 ]
               );
             };
+            // Map type to label and color
+            let typeLabel = '-';
+            let cardBg = 'white';
+            if (overtime.type === 'overtime') {
+              typeLabel = 'Lembur';
+              cardBg = '#F3F6FF'; // light blue for lembur
+            } else if (overtime.type === 'leave') {
+              typeLabel = 'Dinas';
+              cardBg = '#FEF9EC'; // light yellow for dinas
+            } else {
+              typeLabel = overtime.type || '-';
+            }
             return (
-              <ThemedView key={overtime.id} style={styles.historyItem}>
+              <ThemedView key={overtime.id} style={[styles.historyItem, { backgroundColor: cardBg }]}> 
                 <ThemedView style={styles.historyHeader}>
                   <ThemedView style={styles.historyLeft}>
                     <ThemedView style={[styles.statusDot, { backgroundColor: getStatusColor(overtime.status) }]} />
@@ -236,7 +248,7 @@ export default function OvertimeScreen() {
                     </ThemedView>
                   </ThemedView>
                   <ThemedView style={styles.historyRight}>
-                    <ThemedView style={[styles.statusBadge, { backgroundColor: getStatusColor(overtime.status) }]}>
+                    <ThemedView style={[styles.statusBadge, { backgroundColor: getStatusColor(overtime.status) }]}> 
                       <ThemedText style={styles.statusText}>{overtime.status}</ThemedText>
                     </ThemedView>
                     {overtime.status === 'pending' && (
@@ -249,10 +261,10 @@ export default function OvertimeScreen() {
                 <ThemedView style={styles.historyDetails}>
                   <ThemedView style={styles.detailRow}>
                     <ThemedText style={styles.detailLabel}>Type:</ThemedText>
-                    <ThemedText style={styles.detailValue}>{overtime.type || '-'}</ThemedText>
+                    <ThemedText style={styles.detailValue}>{typeLabel}</ThemedText>
                   </ThemedView>
                   <ThemedView style={styles.detailRow}>
-                    <ThemedText style={styles.detailLabel}>Reason:</ThemedText>
+                    <ThemedText style={styles.detailLabel}>Alasan:</ThemedText>
                     <ThemedText style={styles.detailValue}>{overtime.reason}</ThemedText>
                   </ThemedView>
                   <ThemedView style={styles.detailRow}>
