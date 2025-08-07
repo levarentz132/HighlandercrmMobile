@@ -164,122 +164,47 @@ const AttendanceScreen: React.FC = () => {
 
   // Clock in/out handler (shows confirmation modal)
   const handleCheckIn = async () => {
-    if (!location) {
-      Alert.alert('Location Error', 'Unable to get device location.');
-      return;
-    }
-    // Auto-checkout logic: if lastAttendance exists, is checked in, and check-in date is before today, auto-checkout at 17:00
-    if (isCheckedIn && lastAttendance && lastAttendance.clock_in_time && !lastAttendance.clock_out_time) {
-      const checkInDate = new Date(lastAttendance.clock_in_time);
-      const now = new Date();
-      // If check-in date is before today
-      if (
-        checkInDate.getFullYear() < now.getFullYear() ||
-        checkInDate.getMonth() < now.getMonth() ||
-        checkInDate.getDate() < now.getDate()
-      ) {
-        // Auto-checkout at 17:00 of check-in day
-        const autoCheckoutTime = new Date(checkInDate);
-        autoCheckoutTime.setHours(17, 0, 0, 0);
-        // Prepare payload for auto-checkout
-        try {
-          const token = await AsyncStorage.getItem('auth_token');
-          if (token) {
-            const payload = {
-              status: 'out',
-              lat: lastAttendance.lat ?? location.lat,
-              lng: lastAttendance.lng ?? location.lng,
-              location_reason: 'Auto checkout (forgot to checkout)',
-              client_time: `${autoCheckoutTime.getFullYear()}-${String(autoCheckoutTime.getMonth()+1).padStart(2,'0')}-${String(autoCheckoutTime.getDate()).padStart(2,'0')} 17:00:00`,
-            };
-            await fetch('https://crm.highlander.co.id/api/attendance/clock', {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${token}`,
-                'Accept': 'application/json',
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify(payload),
-            });
-            // Refetch attendance data
-            setLoadingHistory(true);
-            const attendanceRes = await fetch(`https://crm.highlander.co.id/api/attendance?per_page=20&page=1`, {
-              method: 'GET',
-              headers: {
-                'Authorization': `Bearer ${token}`,
-                'Accept': 'application/json',
-              },
-            });
-            const attendanceResult = await attendanceRes.json();
-            let newData = Array.isArray(attendanceResult.data) ? attendanceResult.data : [];
-            let latestNoClockOut = null;
-            for (let rec of newData) {
-              if (rec.type === 1 && !rec.clock_out_time) {
-                latestNoClockOut = rec;
-                break;
-              }
-            }
-            if (latestNoClockOut) {
-              newData = [latestNoClockOut, ...newData.filter((r: any) => r !== latestNoClockOut)];
-            }
-            setAttendanceHistory(newData);
-            setHasMore(attendanceResult.current_page < attendanceResult.last_page);
-            if (latestNoClockOut) {
-              setLastAttendance(latestNoClockOut);
-              setIsCheckedIn(true);
-              setCheckInTime(latestNoClockOut.clock_in_time || null);
-            } else if (newData.length > 0) {
-              setLastAttendance(newData[0]);
-              setIsCheckedIn(false);
-              setCheckInTime(null);
-            } else {
-              setLastAttendance(null);
-              setIsCheckedIn(false);
-              setCheckInTime(null);
-            }
-            setPage(1);
-            Alert.alert('Auto Checkout', 'You were automatically checked out at 17:00 yesterday because you forgot to check out.');
-            return; // Prevent double check-in/out in same tap
-          }
-        } catch (err) {
-          // handle error
-        }
+    try {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        setLocation(null);
+        Alert.alert('Location Error', 'Location permission is required.');
+        return;
       }
+      let loc = await Location.getCurrentPositionAsync({});
+      setLocation({ lat: loc.coords.latitude, lng: loc.coords.longitude });
+      // Determine status: 'in' or 'out'
+      const statusType = isCheckedIn ? 'out' : 'in';
+      setPendingClockType(statusType);
+      // Check if outside office radius
+      const dist = getDistanceMeters(loc.coords.latitude, loc.coords.longitude, OFFICE_COORDS.lat, OFFICE_COORDS.lng);
+      if (dist > OFFICE_RADIUS_METERS) {
+        setShowLocationInput(true);
+        setLocationReason('Outside office');
+      } else {
+        setShowLocationInput(false);
+        setLocationReason('Arrived at office');
+      }
+      setShowConfirmModal(true);
+    } catch (e) {
+      setLocation(null);
+      Alert.alert('Location Error', 'Unable to get device location.');
     }
-    // Determine status: 'in' or 'out'
-    const status = isCheckedIn ? 'out' : 'in';
-    setPendingClockType(status);
-    // Check if outside office radius
-    const dist = getDistanceMeters(location.lat, location.lng, OFFICE_COORDS.lat, OFFICE_COORDS.lng);
-    if (dist > OFFICE_RADIUS_METERS) {
-      setShowLocationInput(true);
-      setLocationReason('Outside office');
-    } else {
-      setShowLocationInput(false);
-      setLocationReason('Arrived at office');
-    }
-    setShowConfirmModal(true);
   };
 
   // Submit clock in/out to API
   const submitClock = async () => {
     setShowConfirmModal(false);
     if (!location || !pendingClockType) return;
+    let token: string | null = null;
+    // Always use current device time for submission, right at confirmation
+    let clientTime = '';
+    const now = new Date();
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    clientTime = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
     try {
-      const token = await AsyncStorage.getItem('auth_token');
+      token = await AsyncStorage.getItem('auth_token');
       if (!token) throw new Error('No auth token');
-      // Always use current device time for submission
-      let clientTime;
-      if (pendingClockType === 'in') {
-        const now = new Date();
-        const pad = (n: number) => n.toString().padStart(2, '0');
-        clientTime = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
-      } else {
-        // For clock out, use current time as well (unless you want to customize)
-        const now = new Date();
-        const pad = (n: number) => n.toString().padStart(2, '0');
-        clientTime = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
-      }
       const payload = {
         status: pendingClockType,
         lat: location.lat,
@@ -299,52 +224,60 @@ const AttendanceScreen: React.FC = () => {
         },
         body: JSON.stringify(payload),
       });
-      const result = await response.json();
+      let result: any = {};
+      try {
+        result = await response.json();
+      } catch {}
       if (response.ok) {
         Alert.alert('Success', `Clock ${pendingClockType === 'in' ? 'in' : 'out'} successful.`);
-        // Immediately refetch attendance data for real-time update
-        setLoadingHistory(true);
-        const attendanceRes = await fetch(`https://crm.highlander.co.id/api/attendance?per_page=20&page=1`, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Accept': 'application/json',
-          },
-        });
-        const attendanceResult = await attendanceRes.json();
-        let newData = Array.isArray(attendanceResult.data) ? attendanceResult.data : [];
-        let latestNoClockOut = null;
-        for (let rec of newData) {
-          if (rec.type === 1 && !rec.clock_out_time) {
-            latestNoClockOut = rec;
-            break;
-          }
-        }
-        if (latestNoClockOut) {
-          newData = [latestNoClockOut, ...newData.filter((r: any) => r !== latestNoClockOut)];
-        }
-        setAttendanceHistory(newData);
-        setHasMore(attendanceResult.current_page < attendanceResult.last_page);
-        if (latestNoClockOut) {
-          setLastAttendance(latestNoClockOut);
-          setIsCheckedIn(true);
-          setCheckInTime(latestNoClockOut.clock_in_time || null);
-        } else if (newData.length > 0) {
-          setLastAttendance(newData[0]);
-          setIsCheckedIn(false);
-          setCheckInTime(null);
-        } else {
-          setLastAttendance(null);
-          setIsCheckedIn(false);
-          setCheckInTime(null);
-        }
-        setPage(1); // keep pagination in sync
       } else {
         Alert.alert('Error', result.message || 'Failed to submit attendance.');
       }
     } catch (err: any) {
       Alert.alert('Error', err.message || 'Failed to submit attendance.');
     } finally {
+      // Always refetch attendance data regardless of API response
+      try {
+        if (!token) token = await AsyncStorage.getItem('auth_token');
+        if (token) {
+          setLoadingHistory(true);
+          const attendanceRes = await fetch(`https://crm.highlander.co.id/api/attendance?per_page=20&page=1`, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Accept': 'application/json',
+            },
+          });
+          const attendanceResult = await attendanceRes.json();
+          let newData = Array.isArray(attendanceResult.data) ? attendanceResult.data : [];
+          let latestNoClockOut = null;
+          for (let rec of newData) {
+            if (rec.type === 1 && !rec.clock_out_time) {
+              latestNoClockOut = rec;
+              break;
+            }
+          }
+          if (latestNoClockOut) {
+            newData = [latestNoClockOut, ...newData.filter((r: any) => r !== latestNoClockOut)];
+          }
+          setAttendanceHistory(newData);
+          setHasMore(attendanceResult.current_page < attendanceResult.last_page);
+          if (latestNoClockOut) {
+            setLastAttendance(latestNoClockOut);
+            setIsCheckedIn(true);
+            setCheckInTime(latestNoClockOut.clock_in_time || null);
+          } else if (newData.length > 0) {
+            setLastAttendance(newData[0]);
+            setIsCheckedIn(false);
+            setCheckInTime(null);
+          } else {
+            setLastAttendance(null);
+            setIsCheckedIn(false);
+            setCheckInTime(null);
+          }
+          setPage(1); // keep pagination in sync
+        }
+      } catch {}
       setPendingClockType(null);
       setLoadingHistory(false);
     }
@@ -453,7 +386,7 @@ const AttendanceScreen: React.FC = () => {
                   <ThemedText style={{ color: '#059669', fontSize: 15 }}>{location ? location.lng.toFixed(6) : '-'}</ThemedText>
                 </ThemedView>
                 <ThemedView style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <ThemedText style={{ fontWeight: 'bold', color: '#059669', fontSize: 15 }}>Location Reason</ThemedText>
+                  <ThemedText style={{ fontWeight: 'bold', color: '#059669', fontSize: 15 }}>Reason</ThemedText>
                   <ThemedText style={{ color: '#059669', fontSize: 15 }}>{locationReason}</ThemedText>
                 </ThemedView>
                 <ThemedView style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
