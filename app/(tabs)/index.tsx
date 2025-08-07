@@ -2,6 +2,7 @@ import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { IconSymbol } from '@/components/ui/IconSymbol';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
 import { Dimensions, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
 
 const { width } = Dimensions.get('window');
@@ -9,7 +10,8 @@ const { width } = Dimensions.get('window');
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useEffect, useMemo, useState } from 'react';
 
-export default function DashboardScreen({ navigation }: any) {
+export default function DashboardScreen() {
+  const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [loadingUser, setLoadingUser] = useState(true);
 
@@ -87,7 +89,7 @@ export default function DashboardScreen({ navigation }: any) {
             <TouchableOpacity
               key={action.id}
               style={styles.actionCard}
-              onPress={() => navigation.navigate(action.route)}
+              onPress={() => router.push(action.route as any)}
             >
               <LinearGradient
                 colors={[action.color, action.color + '80']}
