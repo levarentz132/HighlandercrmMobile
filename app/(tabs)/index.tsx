@@ -7,10 +7,9 @@ import { Dimensions, ScrollView, StyleSheet, TouchableOpacity } from 'react-nati
 const { width } = Dimensions.get('window');
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import React, { useEffect, useState } from 'react';
-// ...existing code...
+import React, { useEffect, useMemo, useState } from 'react';
 
-export default function DashboardScreen() {
+export default function DashboardScreen({ navigation }: any) {
   const [user, setUser] = useState<any>(null);
   const [loadingUser, setLoadingUser] = useState(true);
 
@@ -39,18 +38,27 @@ export default function DashboardScreen() {
     fetchUser();
   }, []);
 
-  const quickActions = [
-    { id: 1, title: 'Check In', icon: 'clock.fill' as const, color: '#10B981', route: '/attendance' },
-    { id: 2, title: 'Apply Leave', icon: 'calendar.badge.plus' as const, color: '#F59E0B', route: '/leaves' },
-    { id: 3, title: 'Overtime', icon: 'clock.arrow.circlepath' as const, color: '#8B5CF6', route: '/overtime' },
-    { id: 4, title: 'Clients', icon: 'person.3.fill' as const, color: '#EF4444', route: '/crm' },
-  ];
+  // Format today's date in Indonesian
+  const todayDate = useMemo(() => {
+    const now = new Date();
+    const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+    const months = [
+      'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+    ];
+    const day = days[now.getDay()];
+    const date = now.getDate();
+    const month = months[now.getMonth()];
+    const year = now.getFullYear();
+    return `${day}, ${date} ${month} ${year}`;
+  }, []);
 
-  const stats = [
-    { label: 'Hours Today', value: '8.5', color: '#06B6D4' },
-    { label: 'This Month', value: '156h', color: '#10B981' },
-    { label: 'Pending Leaves', value: '2', color: '#F59E0B' },
-    { label: 'Active Clients', value: '12', color: '#8B5CF6' },
+  // Update quickActions to use correct expo-router paths
+  const quickActions = [
+    { id: 1, title: 'Dashboard', icon: 'chart.bar.fill', color: '#6366F1', route: '/index' },
+    { id: 2, title: 'Check In/Out', icon: 'clock.fill', color: '#10B981', route: '/attendance' },
+    { id: 3, title: 'Izin/Cuti', icon: 'calendar.badge.clock', color: '#F59E0B', route: '/leaves' },
+    { id: 4, title: 'Lembur/Dinas', icon: 'person.3.fill', color: '#8B5CF6', route: '/overtime' },
   ];
 
   return (
@@ -67,7 +75,7 @@ export default function DashboardScreen() {
           <ThemedText style={styles.userName}>
             {loadingUser ? 'Loading...' : user?.name || 'User'}
           </ThemedText>
-          <ThemedText style={styles.date}>Monday, August 4, 2025</ThemedText>
+          <ThemedText style={styles.date}>{todayDate}</ThemedText>
         </ThemedView>
       </LinearGradient>
 
@@ -76,12 +84,16 @@ export default function DashboardScreen() {
         <ThemedText style={styles.sectionTitle}>Quick Actions</ThemedText>
         <ThemedView style={styles.quickActionsGrid}>
           {quickActions.map((action) => (
-            <TouchableOpacity key={action.id} style={styles.actionCard}>
+            <TouchableOpacity
+              key={action.id}
+              style={styles.actionCard}
+              onPress={() => navigation.navigate(action.route)}
+            >
               <LinearGradient
                 colors={[action.color, action.color + '80']}
                 style={styles.actionGradient}
               >
-                <IconSymbol name={action.icon} size={28} color="white" />
+                <IconSymbol name={action.icon as any} size={28} color="white" /> {/* Cast icon to any */}
                 <ThemedText style={styles.actionText}>{action.title}</ThemedText>
               </LinearGradient>
             </TouchableOpacity>
@@ -89,45 +101,30 @@ export default function DashboardScreen() {
         </ThemedView>
       </ThemedView>
 
-      {/* Stats Cards */}
+      {/* Explanation Section */}
       <ThemedView style={styles.section}>
-        <ThemedText style={styles.sectionTitle}>Today's Overview</ThemedText>
-        <ThemedView style={styles.statsGrid}>
-          {stats.map((stat, index) => (
-            <ThemedView key={index} style={[styles.statCard, { borderLeftColor: stat.color }]}>
-              <ThemedText style={styles.statValue}>{stat.value}</ThemedText>
-              <ThemedText style={styles.statLabel}>{stat.label}</ThemedText>
-            </ThemedView>
-          ))}
-        </ThemedView>
-      </ThemedView>
-
-      {/* Recent Activity */}
-      <ThemedView style={styles.section}>
-        <ThemedText style={styles.sectionTitle}>Recent Activity</ThemedText>
-        <ThemedView style={styles.activityList}>
-          <ThemedView style={styles.activityItem}>
-            <ThemedView style={[styles.activityDot, { backgroundColor: '#10B981' }]} />
-            <ThemedView style={styles.activityContent}>
-              <ThemedText style={styles.activityTitle}>Checked in at 9:00 AM</ThemedText>
-              <ThemedText style={styles.activityTime}>2 hours ago</ThemedText>
-            </ThemedView>
-          </ThemedView>
-          <ThemedView style={styles.activityItem}>
-            <ThemedView style={[styles.activityDot, { backgroundColor: '#F59E0B' }]} />
-            <ThemedView style={styles.activityContent}>
-              <ThemedText style={styles.activityTitle}>Leave request submitted</ThemedText>
-              <ThemedText style={styles.activityTime}>Yesterday</ThemedText>
-            </ThemedView>
-          </ThemedView>
-          <ThemedView style={styles.activityItem}>
-            <ThemedView style={[styles.activityDot, { backgroundColor: '#8B5CF6' }]} />
-            <ThemedView style={styles.activityContent}>
-              <ThemedText style={styles.activityTitle}>Client meeting completed</ThemedText>
-              <ThemedText style={styles.activityTime}>2 days ago</ThemedText>
-            </ThemedView>
-          </ThemedView>
-        </ThemedView>
+        <ThemedText style={styles.sectionTitle}>Panduan Penggunaan Aplikasi</ThemedText>
+        <ThemedText style={styles.explanationText}>
+          1. Login: Masukkan username dan password Anda untuk masuk ke aplikasi.
+        </ThemedText>
+        <ThemedText style={styles.explanationText}>
+          2. Absensi: Pilih menu "Check In/Out" untuk melakukan check-in dan check-out setiap hari kerja.
+        </ThemedText>
+        <ThemedText style={styles.explanationText}>
+          3. Dinas & Lembur: Ajukan permohonan dinas atau lembur melalui menu "Lembur / Dinas". Isi tanggal dan alasan pengajuan, lalu kirim permohonan.
+        </ThemedText>
+        <ThemedText style={styles.explanationText}>
+          4. Cuti: Ajukan cuti melalui menu "Izin/Cuti" dengan mengisi tanggal dan alasan cuti.
+        </ThemedText>
+        <ThemedText style={styles.explanationText}>
+          5. Riwayat: Lihat riwayat absensi, dinas, lembur, dan cuti Anda di masing-masing menu.
+        </ThemedText>
+        <ThemedText style={styles.explanationText}>
+          7. Notifikasi: Periksa notifikasi untuk informasi terbaru terkait pengajuan Anda.
+        </ThemedText>
+        <ThemedText style={styles.explanationText}>
+          Jika mengalami kendala, silakan hubungi admin HRD Highlander.
+        </ThemedText>
       </ThemedView>
     </ScrollView>
   );
@@ -207,71 +204,10 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textAlign: 'center',
   },
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    backgroundColor: 'transparent',
-  },
-  statCard: {
-    width: (width - 60) / 2,
-    backgroundColor: 'white',
-    padding: 20,
-    borderRadius: 16,
-    marginBottom: 15,
-    borderLeftWidth: 4,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-  },
-  statValue: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1F2937',
-  },
-  statLabel: {
+  explanationText: {
     fontSize: 14,
-    color: '#6B7280',
-    marginTop: 5,
-  },
-  activityList: {
-    backgroundColor: 'white',
-    borderRadius: 16,
-    padding: 20,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-  },
-  activityItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-    backgroundColor: 'transparent',
-  },
-  activityDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 15,
-  },
-  activityContent: {
-    flex: 1,
-    backgroundColor: 'transparent',
-  },
-  activityTitle: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#1F2937',
-  },
-  activityTime: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginTop: 2,
+    color: '#374151',
+    marginBottom: 10,
+    lineHeight: 20,
   },
 });
