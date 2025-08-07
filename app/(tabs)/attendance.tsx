@@ -282,6 +282,18 @@ const AttendanceScreen: React.FC = () => {
     }
   };
 
+  // Add a function to request location permission and get location
+  const requestLocation = async () => {
+    let { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== 'granted') {
+      setLocation(null);
+      Alert.alert('Permission Denied', 'Location permission is required to use attendance features.');
+      return;
+    }
+    let loc = await Location.getCurrentPositionAsync({});
+    setLocation({ lat: loc.coords.latitude, lng: loc.coords.longitude });
+  };
+
   return (
     <ScrollView style={[styles.container, { backgroundColor: theme.background }]} showsVerticalScrollIndicator={false}>
       {/* Header */}
@@ -296,6 +308,16 @@ const AttendanceScreen: React.FC = () => {
           <ThemedText style={[styles.headerSubtitle, { color: 'white', opacity: 0.8 }]}>Track your daily attendance</ThemedText>
         </ThemedView>
       </LinearGradient>
+
+      {/* Show enable location button if location is not available */}
+      {!location && (
+        <ThemedView style={{ padding: 20, alignItems: 'center' }}>
+          <ThemedText style={{ color: theme.error, marginBottom: 10 }}>Location is not enabled. Attendance features require device location.</ThemedText>
+          <TouchableOpacity onPress={requestLocation} style={{ backgroundColor: theme.accent, paddingVertical: 12, paddingHorizontal: 24, borderRadius: 10 }}>
+            <ThemedText style={{ color: 'white', fontWeight: 'bold', fontSize: 16 }}>Enable Location</ThemedText>
+          </TouchableOpacity>
+        </ThemedView>
+      )}
 
       {/* Check In/Out Section */}
       <ThemedView style={styles.section}>
@@ -329,7 +351,7 @@ const AttendanceScreen: React.FC = () => {
         </ThemedView>
         {/* Confirmation Modal */}
         {showConfirmModal && (
-          <ThemedView style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: theme.background, justifyContent: 'center', alignItems: 'center', zIndex: 10 }}>
+          <ThemedView style={{ position: 'absolute', top: 10, left: 0, right: 0, bottom: 0, backgroundColor: theme.background, justifyContent: 'center', alignItems: 'center', zIndex: 10 }}>
             <ThemedView style={{ backgroundColor: theme.card, borderRadius: 28, padding: 32, width: '90%', shadowColor: theme.accent, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.12, shadowRadius: 24, elevation: 16 }}>
               <ThemedView style={{ alignItems: 'center', marginBottom: 18 }}>
                 <IconSymbol name={pendingClockType === 'in' ? 'clock.badge.checkmark' : 'clock.badge.xmark'} size={48} color={pendingClockType === 'in' ? '#10B981' : '#EF4444'} />
